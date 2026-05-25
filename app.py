@@ -1,32 +1,3 @@
-# ひなた記録 Ver.1.6 改善版
-
-## 主な改善点
-
-### UI改善
-
-* 録音ボタンを大型化
-* 録音ボタンが状態変化
-
-  * 🎙 録音開始
-  * ■ 録音停止
-  * 📝 文字起こし
-* やり直しボタン追加
-* 状態表示追加
-* 操作数削減
-
-### 運用改善
-
-* 職員固定化（session_state保持）
-* 管理者画面追加
-* CSVダウンロード
-* 音声ファイル一覧
-* 音声ファイル一括ダウンロード準備
-
----
-
-# app.py
-
-```python
 import streamlit as st
 from datetime import datetime
 import pandas as pd
@@ -41,20 +12,12 @@ st.set_page_config(
     layout="centered"
 )
 
-# =====================================================
-# データ保存
-# =====================================================
-
 DATA_DIR = Path("data")
 AUDIO_DIR = DATA_DIR / "audio"
 DATA_DIR.mkdir(exist_ok=True)
 AUDIO_DIR.mkdir(exist_ok=True)
 
 LOG_FILE = DATA_DIR / "record_log.csv"
-
-# =====================================================
-# マスタ
-# =====================================================
 
 STAFF_LIST = [
     "小久保",
@@ -70,10 +33,6 @@ USER_LIST = [
     "その他"
 ]
 
-# =====================================================
-# Session State
-# =====================================================
-
 DEFAULTS = {
     "staff_name": STAFF_LIST[0],
     "current_start": "",
@@ -88,9 +47,6 @@ for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# =====================================================
-# 関数
-# =====================================================
 
 def now_text():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -115,16 +71,13 @@ def save_log(row):
 
 def get_openai_client():
     api_key = st.secrets.get("OPENAI_API_KEY", "")
-
     if not api_key:
         return None
-
     return OpenAI(api_key=api_key)
 
 
 def transcribe_audio(audio_path):
     client = get_openai_client()
-
     if client is None:
         raise RuntimeError("OPENAI_API_KEY が設定されていません")
 
@@ -134,24 +87,13 @@ def transcribe_audio(audio_path):
             file=audio_file,
             language="ja"
         )
-
     return result.text
 
-# =====================================================
-# サイドバー
-# =====================================================
 
-mode = st.sidebar.radio(
-    "画面",
-    ["記録入力", "管理者"]
-)
+mode = st.sidebar.radio("画面", ["記録入力", "管理者"])
 
-# =====================================================
-# 管理者画面
-# =====================================================
 
 if mode == "管理者":
-
     st.title("☀️ 管理者画面")
 
     password = st.text_input("管理者パスワード", type="password")
@@ -169,7 +111,6 @@ if mode == "管理者":
         st.dataframe(df, use_container_width=True)
 
         csv = df.to_csv(index=False, encoding="utf-8-sig")
-
         st.download_button(
             "CSVダウンロード",
             data=csv.encode("utf-8-sig"),
@@ -177,6 +118,8 @@ if mode == "管理者":
             mime="text/csv",
             use_container_width=True,
         )
+    else:
+        st.caption("保存済みログはありません")
 
     st.divider()
 
@@ -185,7 +128,6 @@ if mode == "管理者":
     audio_files = list(AUDIO_DIR.glob("*.wav"))
 
     if audio_files:
-
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w") as zf:
@@ -202,25 +144,16 @@ if mode == "管理者":
 
         for file in audio_files:
             st.write(file.name)
-
     else:
         st.caption("音声ファイルなし")
 
     st.stop()
 
-# =====================================================
-# 通常画面
-# =====================================================
 
 st.title("☀️ ひなた記録 Ver.1.6")
 st.caption("録音 → 確認 → 文字起こし → 記録")
 
-# =====================================================
-# 職員固定
-# =====================================================
-
 with st.expander("担当者設定", expanded=False):
-
     selected_staff = st.selectbox(
         "担当者",
         STAFF_LIST,
@@ -230,17 +163,12 @@ with st.expander("担当者設定", expanded=False):
 
     if selected_staff == "その他":
         other_staff = st.text_input("担当者名")
-
         if other_staff:
             st.session_state.staff_name = other_staff
     else:
         st.session_state.staff_name = selected_staff
 
 st.info(f"担当：{st.session_state.staff_name}")
-
-# =====================================================
-# 利用者
-# =====================================================
 
 selected_user = st.selectbox("利用者", USER_LIST)
 
@@ -253,10 +181,6 @@ service_type = st.selectbox(
     "種別",
     ["居宅", "同行", "通院介助", "移動支援", "その他"]
 )
-
-# =====================================================
-# 開始終了
-# =====================================================
 
 col1, col2 = st.columns(2)
 
@@ -275,10 +199,6 @@ st.info(
 
 st.divider()
 
-# =====================================================
-# 録音UI
-# =====================================================
-
 st.subheader("🎙 録音")
 
 if st.session_state.record_state == "idle":
@@ -291,10 +211,10 @@ else:
 st.markdown(
     """
     <style>
-    div.stButton > button:first-child {
-        height: 80px;
-        font-size: 28px;
-        border-radius: 18px;
+    div.stButton > button {
+        min-height: 70px;
+        font-size: 24px;
+        border-radius: 16px;
     }
     </style>
     """,
@@ -315,20 +235,14 @@ if retry_action:
     st.session_state.record_state = "idle"
     st.rerun()
 
-# =====================================================
-# 録音
-# =====================================================
 
 if st.session_state.record_state == "idle":
-
     audio_value = st.audio_input("録音")
 
     if audio_value is not None:
-
         st.audio(audio_value)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
         filename = (
             f"{timestamp}_"
             f"{safe_filename(st.session_state.staff_name)}_"
@@ -344,39 +258,24 @@ if st.session_state.record_state == "idle":
         st.session_state.record_state = "recorded"
 
         st.success("録音完了。内容を確認してください")
+        st.rerun()
 
-# =====================================================
-# 録音確認
-# =====================================================
 
 if st.session_state.saved_audio_path:
-
     st.caption("録音済み")
-
     st.audio(st.session_state.saved_audio_path)
-
     st.info("問題なければ『文字起こし』を押してください")
 
-# =====================================================
-# 文字起こし
-# =====================================================
 
 if main_action and st.session_state.record_state == "recorded":
-
     try:
         with st.spinner("文字起こし中..."):
             st.session_state.transcript = transcribe_audio(
                 st.session_state.saved_audio_path
             )
-
         st.success("文字起こし完了")
-
     except Exception as e:
         st.error(f"文字起こし失敗：{e}")
-
-# =====================================================
-# テキスト
-# =====================================================
 
 st.divider()
 
@@ -392,16 +291,11 @@ memo = st.text_area(
     placeholder="交通費・体調など"
 )
 
-# =====================================================
-# 記録案
-# =====================================================
-
 if st.button("記録案を作成", type="primary", use_container_width=True):
-
     body = transcript
 
     if memo:
-        body += f"\n補足：{memo}"
+        body += f"\\n補足：{memo}"
 
     st.session_state.draft = f"""【支援記録案】
 担当：{st.session_state.staff_name}
@@ -415,7 +309,6 @@ if st.button("記録案を作成", type="primary", use_container_width=True):
 """
 
 if st.session_state.draft:
-
     st.text_area(
         "記録案",
         value=st.session_state.draft,
@@ -423,7 +316,6 @@ if st.session_state.draft:
     )
 
     if st.button("保存", use_container_width=True):
-
         save_log({
             "保存日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "担当": st.session_state.staff_name,
@@ -431,45 +323,10 @@ if st.session_state.draft:
             "種別": service_type,
             "開始": st.session_state.current_start,
             "終了": st.session_state.current_end,
+            "音声ファイル": st.session_state.saved_audio_path,
             "文字起こし": transcript,
             "補足": memo,
             "記録案": st.session_state.draft,
         })
 
         st.success("保存しました")
-```
-
----
-
-## requirements.txt
-
-```text
-streamlit
-pandas
-openai
-```
-
----
-
-## 今後の候補
-
-### Ver.1.7
-
-* ログイン方式
-* 利用者マスタ編集
-* 音声自動削除設定
-* Excel出力整形
-* 国保連貼り付け用フォーマット
-
-### Ver.2
-
-* ローカルWhisper
-* Ollama要約
-* CSV自動生成
-* ケアマネ提出形式
-* 事業所別設定
-
-        file_name="hinata_record_log.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
